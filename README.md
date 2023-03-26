@@ -1,4 +1,4 @@
-# You-Get
+# I-Got
 
 [![Build Status](https://github.com/pippianders/i-got/workflows/develop/badge.svg)](https://github.com/pippianders/i-got/actions)
 [![PyPI version](https://img.shields.io/pypi/v/i-got.svg)](https://pypi.python.org/pypi/i-got/)

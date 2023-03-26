@@ -1,4 +1,4 @@
-You-Get
+I-Got
 =======
 
 |PyPI version| |Build Status| |Gitter|
