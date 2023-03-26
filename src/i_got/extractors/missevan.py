@@ -30,8 +30,10 @@ import urllib.parse
 from ..common import get_content, urls_size, log, player, dry_run
 from ..extractor import VideoExtractor
 
-_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 ' \
-       '(KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36'
+_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36"
+)
 
 
 class _NoMatchException(Exception):
@@ -39,7 +41,6 @@ class _NoMatchException(Exception):
 
 
 class _Dispatcher(object):
-
     def __init__(self):
         self.entry = []
 
@@ -51,10 +52,12 @@ class _Dispatcher(object):
         self.entry.append((patterns, fun))
 
     def endpoint(self, *patterns):
-        assert patterns, 'patterns must not be empty'
+        assert patterns, "patterns must not be empty"
+
         def _wrap(fun):
             self.register(patterns, fun)
             return fun
+
         return _wrap
 
     def test(self, url):
@@ -75,31 +78,43 @@ class _Dispatcher(object):
 
         raise _NoMatchException()
 
+
 missevan_stream_types = [
-    {'id': 'source', 'quality': '源文件', 'url_json_key': 'soundurl'},
-    {'id': '128', 'quality': '128 Kbps', 'url_json_key': 'soundurl_128'},
-    {'id': 'covers', 'desc': '封面图', 'url_json_key': 'cover_image',
-     'default_src': 'covers/nocover.png',
-     'resource_url_fmt': 'covers/{resource_url}'},
-    {'id': 'coversmini', 'desc': '封面缩略图', 'url_json_key': 'front_cover',
-     'default_src': 'coversmini/nocover.png'}
+    {"id": "source", "quality": "源文件", "url_json_key": "soundurl"},
+    {"id": "128", "quality": "128 Kbps", "url_json_key": "soundurl_128"},
+    {
+        "id": "covers",
+        "desc": "封面图",
+        "url_json_key": "cover_image",
+        "default_src": "covers/nocover.png",
+        "resource_url_fmt": "covers/{resource_url}",
+    },
+    {
+        "id": "coversmini",
+        "desc": "封面缩略图",
+        "url_json_key": "front_cover",
+        "default_src": "coversmini/nocover.png",
+    },
 ]
 
-def _get_resource_uri(data, stream_type):
-    uri = data[stream_type['url_json_key']]
-    if not uri:
-        return stream_type.get('default_src')
 
-    uri_fmt = stream_type.get('resource_url_fmt')
+def _get_resource_uri(data, stream_type):
+    uri = data[stream_type["url_json_key"]]
+    if not uri:
+        return stream_type.get("default_src")
+
+    uri_fmt = stream_type.get("resource_url_fmt")
     if not uri_fmt:
         return uri
     return uri_fmt.format(resource_url=uri)
 
-def is_covers_stream(stream):
-    stream = stream or ''
-    return stream.lower() in ('covers', 'coversmini')
 
-def get_file_extension(file_path, default=''):
+def is_covers_stream(stream):
+    stream = stream or ""
+    return stream.lower() in ("covers", "coversmini")
+
+
+def get_file_extension(file_path, default=""):
     url_parse_result = urllib.parse.urlparse(file_path)
     _, suffix = os.path.splitext(url_parse_result.path)
     if suffix:
@@ -107,22 +122,23 @@ def get_file_extension(file_path, default=''):
         suffix = suffix[1:]
     return suffix or default
 
+
 def best_quality_stream_id(streams, stream_types):
     for stream_type in stream_types:
-        if streams.get(stream_type['id']):
-            return stream_type['id']
+        if streams.get(stream_type["id"]):
+            return stream_type["id"]
 
-    raise AssertionError('no stream selected')
+    raise AssertionError("no stream selected")
 
 
 class MissEvanWithStream(VideoExtractor):
 
-    name = 'MissEvan'
+    name = "MissEvan"
     stream_types = missevan_stream_types
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.referer = 'https://www.missevan.com/'
+        self.referer = "https://www.missevan.com/"
         self.ua = _UA
 
     @classmethod
@@ -143,21 +159,21 @@ class MissEvanWithStream(VideoExtractor):
         streams_sorted = []
         for key, stream in streams.items():
             copy_stream = stream.copy()
-            copy_stream['id'] = key
+            copy_stream["id"] = key
             streams_sorted.append(copy_stream)
 
         return streams_sorted
 
     def download(self, **kwargs):
-        stream_id = kwargs.get('stream_id') or self.stream_types[0]['id']
+        stream_id = kwargs.get("stream_id") or self.stream_types[0]["id"]
         stream = self.streams[stream_id]
-        if 'size' not in stream:
-            stream['size'] = urls_size(stream['src'])
+        if "size" not in stream:
+            stream["size"] = urls_size(stream["src"])
 
         super().download(**kwargs)
 
     def unsupported_method(self, *args, **kwargs):
-        raise AssertionError('Unsupported')
+        raise AssertionError("Unsupported")
 
     download_by_url = unsupported_method
     download_by_vid = unsupported_method
@@ -167,29 +183,30 @@ class MissEvanWithStream(VideoExtractor):
 
 class MissEvan(VideoExtractor):
 
-    name = 'MissEvan'
+    name = "MissEvan"
     stream_types = missevan_stream_types
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.referer = 'https://www.missevan.com/'
+        self.referer = "https://www.missevan.com/"
         self.ua = _UA
-        self.__headers = {'User-Agent': self.ua, 'Referer': self.referer}
+        self.__headers = {"User-Agent": self.ua, "Referer": self.referer}
 
     __prepare_dispatcher = _Dispatcher()
 
     @__prepare_dispatcher.endpoint(
-        re.compile(r'missevan\.com/sound/(?:player\?.*?id=)?(?P<sid>\d+)', re.I))
+        re.compile(r"missevan\.com/sound/(?:player\?.*?id=)?(?P<sid>\d+)", re.I)
+    )
     def prepare_sound(self, sid, **kwargs):
         json_data = self._get_json(self.url_sound_api(sid))
-        sound = json_data['info']['sound']
+        sound = json_data["info"]["sound"]
 
-        self.title = sound['soundstr']
-        if sound.get('need_pay'):
-            log.e('付费资源无法下载')
+        self.title = sound["soundstr"]
+        if sound.get("need_pay"):
+            log.e("付费资源无法下载")
             return
 
-        if not is_covers_stream(kwargs.get('stream_id')) and not dry_run:
+        if not is_covers_stream(kwargs.get("stream_id")) and not dry_run:
             self.danmaku = self._get_content(self.url_danmaku_api(sid))
 
         self.streams = self.setup_streams(sound)
@@ -204,11 +221,11 @@ class MissEvan(VideoExtractor):
 
             if resource_url:
                 container = get_file_extension(resource_url)
-                stream_id = stream_type['id']
-                streams[stream_id] = {'src': [resource_url], 'container': container}
-                quality = stream_type.get('quality')
+                stream_id = stream_type["id"]
+                streams[stream_id] = {"src": [resource_url], "container": container}
+                quality = stream_type.get("quality")
                 if quality:
-                    streams[stream_id]['quality'] = quality
+                    streams[stream_id]["quality"] = quality
         return streams
 
     def prepare(self, **kwargs):
@@ -219,44 +236,45 @@ class MissEvan(VideoExtractor):
         try:
             self.__prepare_dispatcher.dispatch(self.url, self, **kwargs)
         except _NoMatchException:
-            log.e('[Error] Unsupported URL pattern.')
+            log.e("[Error] Unsupported URL pattern.")
             exit(1)
 
     @staticmethod
     def download_covers(title, streams, **kwargs):
-        if not is_covers_stream(kwargs.get('stream_id')) \
-                and not kwargs.get('json_output') \
-                and not kwargs.get('info_only') \
-                and not player:
-            kwargs['stream_id'] = 'covers'
-            MissEvanWithStream \
-                .create(title, streams) \
-                .download(**kwargs)
+        if (
+            not is_covers_stream(kwargs.get("stream_id"))
+            and not kwargs.get("json_output")
+            and not kwargs.get("info_only")
+            and not player
+        ):
+            kwargs["stream_id"] = "covers"
+            MissEvanWithStream.create(title, streams).download(**kwargs)
 
     _download_playlist_dispatcher = _Dispatcher()
 
     @_download_playlist_dispatcher.endpoint(
-        re.compile(r'missevan\.com/album(?:info)?/(?P<aid>\d+)', re.I))
+        re.compile(r"missevan\.com/album(?:info)?/(?P<aid>\d+)", re.I)
+    )
     def download_album(self, aid, **kwargs):
         json_data = self._get_json(self.url_album_api(aid))
-        album = json_data['info']['album']
-        self.title = album['title']
-        sounds = json_data['info']['sounds']
+        album = json_data["info"]["album"]
+        self.title = album["title"]
+        sounds = json_data["info"]["sounds"]
 
-        output_dir = os.path.abspath(kwargs.pop('output_dir', '.'))
+        output_dir = os.path.abspath(kwargs.pop("output_dir", "."))
         output_dir = os.path.join(output_dir, self.title)
-        kwargs['output_dir'] = output_dir
+        kwargs["output_dir"] = output_dir
 
         for sound in sounds:
-            sound_title = sound['soundstr']
-            if sound.get('need_pay'):
-                log.w('跳过付费资源: ' + sound_title)
+            sound_title = sound["soundstr"]
+            if sound.get("need_pay"):
+                log.w("跳过付费资源: " + sound_title)
                 continue
 
             streams = self.setup_streams(sound)
             extractor = MissEvanWithStream.create(sound_title, streams)
             if not dry_run:
-                sound_id = sound['id']
+                sound_id = sound["id"]
                 danmaku = self._get_content(self.url_danmaku_api(sound_id))
                 extractor.set_danmaku(danmaku)
             extractor.download(**kwargs)
@@ -264,25 +282,26 @@ class MissEvan(VideoExtractor):
             self.download_covers(sound_title, streams, **kwargs)
 
     @_download_playlist_dispatcher.endpoint(
-        re.compile(r'missevan\.com(?:/mdrama)?/drama/(?P<did>\d+)', re.I))
+        re.compile(r"missevan\.com(?:/mdrama)?/drama/(?P<did>\d+)", re.I)
+    )
     def download_drama(self, did, **kwargs):
         json_data = self._get_json(self.url_drama_api(did))
 
-        drama = json_data['info']['drama']
-        if drama.get('need_pay'):
-            log.w('该剧集包含付费资源, 付费资源将被跳过')
+        drama = json_data["info"]["drama"]
+        if drama.get("need_pay"):
+            log.w("该剧集包含付费资源, 付费资源将被跳过")
 
-        self.title = drama['name']
-        output_dir = os.path.abspath(kwargs.pop('output_dir', '.'))
+        self.title = drama["name"]
+        output_dir = os.path.abspath(kwargs.pop("output_dir", "."))
         output_dir = os.path.join(output_dir, self.title)
-        kwargs['output_dir'] = output_dir
+        kwargs["output_dir"] = output_dir
 
-        episodes = json_data['info']['episodes']
-        for each in episodes['episode']:
-            if each.get('need_pay'):
-                log.w('跳过付费资源: ' + each['soundstr'])
+        episodes = json_data["info"]["episodes"]
+        for each in episodes["episode"]:
+            if each.get("need_pay"):
+                log.w("跳过付费资源: " + each["soundstr"])
                 continue
-            sound_id = each['sound_id']
+            sound_id = each["sound_id"]
             MissEvan().download_by_vid(sound_id, **kwargs)
 
     def download_playlist_by_url(self, url, **kwargs):
@@ -290,29 +309,28 @@ class MissEvan(VideoExtractor):
         try:
             self._download_playlist_dispatcher.dispatch(url, self, **kwargs)
         except _NoMatchException:
-            log.e('[Error] Unsupported URL pattern with --playlist option.')
+            log.e("[Error] Unsupported URL pattern with --playlist option.")
             exit(1)
 
     def download_by_url(self, url, **kwargs):
-        if not kwargs.get('playlist') and self._download_playlist_dispatcher.test(url):
-            log.w('This is an album or drama. (use --playlist option to download all).')
+        if not kwargs.get("playlist") and self._download_playlist_dispatcher.test(url):
+            log.w("This is an album or drama. (use --playlist option to download all).")
         else:
             super().download_by_url(url, **kwargs)
 
     def download(self, **kwargs):
-        kwargs['keep_obj'] = True   # keep the self.streams to download cover
+        kwargs["keep_obj"] = True  # keep the self.streams to download cover
         super().download(**kwargs)
         self.download_covers(self.title, self.streams, **kwargs)
 
     def extract(self, **kwargs):
-        stream_id = kwargs.get('stream_id')
+        stream_id = kwargs.get("stream_id")
 
         # fetch all streams size when output info or json
-        if kwargs.get('info_only') and not stream_id \
-                or kwargs.get('json_output'):
+        if kwargs.get("info_only") and not stream_id or kwargs.get("json_output"):
 
             for _, stream in self.streams.items():
-                stream['size'] = urls_size(stream['src'], faker=True)
+                stream["size"] = urls_size(stream["src"], faker=True)
             return
 
         # fetch size of the selected stream only
@@ -320,8 +338,8 @@ class MissEvan(VideoExtractor):
             stream_id = best_quality_stream_id(self.streams, self.stream_types)
 
         stream = self.streams[stream_id]
-        if 'size' not in stream:
-            stream['size'] = urls_size(stream['src'], faker=True)
+        if "size" not in stream:
+            stream["size"] = urls_size(stream["src"], faker=True)
 
     def _get_content(self, url):
         return get_content(url, headers=self.__headers)
@@ -332,28 +350,30 @@ class MissEvan(VideoExtractor):
 
     @staticmethod
     def url_album_api(album_id):
-        return 'https://www.missevan.com/sound' \
-               '/soundalllist?albumid=' + str(album_id)
+        return "https://www.missevan.com/sound" "/soundalllist?albumid=" + str(album_id)
 
     @staticmethod
     def url_sound_api(sound_id):
-        return 'https://www.missevan.com/sound' \
-               '/getsound?soundid=' + str(sound_id)
+        return "https://www.missevan.com/sound" "/getsound?soundid=" + str(sound_id)
 
     @staticmethod
     def url_drama_api(drama_id):
-        return 'https://www.missevan.com/dramaapi' \
-               '/getdrama?drama_id=' + str(drama_id)
+        return "https://www.missevan.com/dramaapi" "/getdrama?drama_id=" + str(drama_id)
 
     @staticmethod
     def url_danmaku_api(sound_id):
-        return 'https://www.missevan.com/sound/getdm?soundid=' + str(sound_id)
+        return "https://www.missevan.com/sound/getdm?soundid=" + str(sound_id)
 
     @staticmethod
     def url_resource(uri):
-        return uri if re.match(r'^https?:/{2}\w.+$', uri) else 'https://static.missevan.com/' + uri
+        return (
+            uri
+            if re.match(r"^https?:/{2}\w.+$", uri)
+            else "https://static.missevan.com/" + uri
+        )
+
 
 site = MissEvan()
-site_info = 'MissEvan.com'
+site_info = "MissEvan.com"
 download = site.download_by_url
 download_playlist = site.download_playlist_by_url

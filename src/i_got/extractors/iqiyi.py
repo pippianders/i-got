@@ -7,14 +7,14 @@ from ..util import log
 from .. import json_output
 
 from uuid import uuid4
-from random import random,randint
+from random import random, randint
 import json
 from math import floor
 from zlib import decompress
 import hashlib
 import time
 
-'''
+"""
 Changelog:
 -> http://www.iqiyi.com/common/flashplayer/20150916/MainPlayer_5_2_28_c3_3_7_4.swf
    use @fffonion 's method in #617.
@@ -34,9 +34,9 @@ Changelog:
 -> http://www.iqiyi.com/common/flashplayer/20150820/MainPlayer_5_2_27_2_c3_3_7_3.swf
     some small changes in Zombie.bite function
 
-'''
+"""
 
-'''
+"""
 com.qiyi.player.core.model.def.DefinitonEnum
 bid meaning for quality
 0 none
@@ -48,8 +48,8 @@ bid meaning for quality
 10 4k
 96 topspeed
 
-'''
-'''
+"""
+"""
 def mix(tvid):
     salt = '4a1caba4b4465345366f28da7c117d20'
     tm = str(randint(2000,4000))
@@ -81,148 +81,197 @@ def getDispathKey(rid):
     time=json.loads(get_content("http://data.video.qiyi.com/t?tn="+str(random())))["t"]
     t=str(int(floor(int(time)/(10*60.0))))
     return hashlib.new("md5",bytes(t+tp+rid,"utf-8")).hexdigest()
-'''
+"""
+
+
 def getVMS(tvid, vid):
     t = int(time.time() * 1000)
-    src = '76f90cbd92f94a2e925d83e8ccd22cb7'
-    key = 'd5fb4bd9d50c4be6948c97edd7254b0e'
-    sc = hashlib.new('md5', bytes(str(t) + key  + vid, 'utf-8')).hexdigest()
-    vmsreq= url = 'http://cache.m.iqiyi.com/tmts/{0}/{1}/?t={2}&sc={3}&src={4}'.format(tvid,vid,t,sc,src)
+    src = "76f90cbd92f94a2e925d83e8ccd22cb7"
+    key = "d5fb4bd9d50c4be6948c97edd7254b0e"
+    sc = hashlib.new("md5", bytes(str(t) + key + vid, "utf-8")).hexdigest()
+    vmsreq = url = "http://cache.m.iqiyi.com/tmts/{0}/{1}/?t={2}&sc={3}&src={4}".format(
+        tvid, vid, t, sc, src
+    )
     return json.loads(get_content(vmsreq))
+
 
 class Iqiyi(VideoExtractor):
     name = "爱奇艺 (Iqiyi)"
 
     stream_types = [
-        {'id': '4k', 'container': 'm3u8', 'video_profile': '4k'},
-        {'id': 'BD', 'container': 'm3u8', 'video_profile': '1080p'},
-        {'id': 'TD', 'container': 'm3u8', 'video_profile': '720p'},
-        {'id': 'TD_H265', 'container': 'm3u8', 'video_profile': '720p H265'},
-        {'id': 'HD', 'container': 'm3u8', 'video_profile': '540p'},
-        {'id': 'HD_H265', 'container': 'm3u8', 'video_profile': '540p H265'},
-        {'id': 'SD', 'container': 'm3u8', 'video_profile': '360p'},
-        {'id': 'LD', 'container': 'm3u8', 'video_profile': '210p'},
+        {"id": "4k", "container": "m3u8", "video_profile": "4k"},
+        {"id": "BD", "container": "m3u8", "video_profile": "1080p"},
+        {"id": "TD", "container": "m3u8", "video_profile": "720p"},
+        {"id": "TD_H265", "container": "m3u8", "video_profile": "720p H265"},
+        {"id": "HD", "container": "m3u8", "video_profile": "540p"},
+        {"id": "HD_H265", "container": "m3u8", "video_profile": "540p H265"},
+        {"id": "SD", "container": "m3u8", "video_profile": "360p"},
+        {"id": "LD", "container": "m3u8", "video_profile": "210p"},
     ]
-    '''
+    """
     supported_stream_types = [ 'high', 'standard']
 
 
     stream_to_bid = {  '4k': 10, 'fullhd' : 5, 'suprt-high' : 4, 'super' : 3, 'high' : 2, 'standard' :1, 'topspeed' :96}
-    '''
-    ids = ['4k','BD', 'TD', 'HD', 'SD', 'LD']
-    vd_2_id = {10: '4k', 19: '4k', 5:'BD', 18: 'BD', 21: 'HD_H265', 2: 'HD', 4: 'TD', 17: 'TD_H265', 96: 'LD', 1: 'SD', 14: 'TD'}
-    id_2_profile = {'4k':'4k', 'BD': '1080p','TD': '720p', 'HD': '540p', 'SD': '360p', 'LD': '210p', 'HD_H265': '540p H265', 'TD_H265': '720p H265'}
-
-
+    """
+    ids = ["4k", "BD", "TD", "HD", "SD", "LD"]
+    vd_2_id = {
+        10: "4k",
+        19: "4k",
+        5: "BD",
+        18: "BD",
+        21: "HD_H265",
+        2: "HD",
+        4: "TD",
+        17: "TD_H265",
+        96: "LD",
+        1: "SD",
+        14: "TD",
+    }
+    id_2_profile = {
+        "4k": "4k",
+        "BD": "1080p",
+        "TD": "720p",
+        "HD": "540p",
+        "SD": "360p",
+        "LD": "210p",
+        "HD_H265": "540p H265",
+        "TD_H265": "720p H265",
+    }
 
     def download_playlist_by_url(self, url, **kwargs):
         self.url = url
 
         video_page = get_content(url)
-        videos = set(re.findall(r'<a href="(?=https?:)?(//www\.iqiyi\.com/v_[^"]+)"', video_page))
+        videos = set(
+            re.findall(r'<a href="(?=https?:)?(//www\.iqiyi\.com/v_[^"]+)"', video_page)
+        )
 
         for video in videos:
-            self.__class__().download_by_url('https:' + video, **kwargs)
+            self.__class__().download_by_url("https:" + video, **kwargs)
 
     def prepare(self, **kwargs):
         assert self.url or self.vid
 
         if self.url and not self.vid:
             html = get_html(self.url)
-            tvid = r1(r'#curid=(.+)_', self.url) or \
-                   r1(r'tvid=([^&]+)', self.url) or \
-                   r1(r'data-player-tvid="([^"]+)"', html) or r1(r'tv(?:i|I)d=(\w+?)\&', html) or r1(r'param\[\'tvid\'\]\s*=\s*"(.+?)"', html)
-            videoid = r1(r'#curid=.+_(.*)$', self.url) or \
-                      r1(r'vid=([^&]+)', self.url) or \
-                      r1(r'data-player-videoid="([^"]+)"', html) or r1(r'vid=(\w+?)\&', html) or r1(r'param\[\'vid\'\]\s*=\s*"(.+?)"', html)
+            tvid = (
+                r1(r"#curid=(.+)_", self.url)
+                or r1(r"tvid=([^&]+)", self.url)
+                or r1(r'data-player-tvid="([^"]+)"', html)
+                or r1(r"tv(?:i|I)d=(\w+?)\&", html)
+                or r1(r'param\[\'tvid\'\]\s*=\s*"(.+?)"', html)
+            )
+            videoid = (
+                r1(r"#curid=.+_(.*)$", self.url)
+                or r1(r"vid=([^&]+)", self.url)
+                or r1(r'data-player-videoid="([^"]+)"', html)
+                or r1(r"vid=(\w+?)\&", html)
+                or r1(r'param\[\'vid\'\]\s*=\s*"(.+?)"', html)
+            )
             self.vid = (tvid, videoid)
-            info_u = 'http://pcw-api.iqiyi.com/video/video/playervideoinfo?tvid=' + tvid
+            info_u = "http://pcw-api.iqiyi.com/video/video/playervideoinfo?tvid=" + tvid
             json_res = get_content(info_u)
-            self.title = json.loads(json_res)['data']['vn']
+            self.title = json.loads(json_res)["data"]["vn"]
         tvid, videoid = self.vid
         info = getVMS(tvid, videoid)
-        assert info['code'] == 'A00000', "can't play this video"
+        assert info["code"] == "A00000", "can't play this video"
 
-        for stream in info['data']['vidl']:
+        for stream in info["data"]["vidl"]:
             try:
-                stream_id = self.vd_2_id[stream['vd']]
+                stream_id = self.vd_2_id[stream["vd"]]
                 if stream_id in self.stream_types:
                     continue
                 stream_profile = self.id_2_profile[stream_id]
-                self.streams[stream_id] = {'video_profile': stream_profile, 'container': 'm3u8', 'src': [stream['m3u']], 'size' : 0, 'm3u8_url': stream['m3u']}
+                self.streams[stream_id] = {
+                    "video_profile": stream_profile,
+                    "container": "m3u8",
+                    "src": [stream["m3u"]],
+                    "size": 0,
+                    "m3u8_url": stream["m3u"],
+                }
             except Exception as e:
-                log.i("vd: {} is not handled".format(stream['vd']))
+                log.i("vd: {} is not handled".format(stream["vd"]))
                 log.i("info is {}".format(stream))
-
 
     def download(self, **kwargs):
         """Override the original one
         Ugly ugly dirty hack"""
-        if 'json_output' in kwargs and kwargs['json_output']:
+        if "json_output" in kwargs and kwargs["json_output"]:
             json_output.output(self)
-        elif 'info_only' in kwargs and kwargs['info_only']:
-            if 'stream_id' in kwargs and kwargs['stream_id']:
+        elif "info_only" in kwargs and kwargs["info_only"]:
+            if "stream_id" in kwargs and kwargs["stream_id"]:
                 # Display the stream
-                stream_id = kwargs['stream_id']
-                if 'index' not in kwargs:
+                stream_id = kwargs["stream_id"]
+                if "index" not in kwargs:
                     self.p(stream_id)
                 else:
                     self.p_i(stream_id)
             else:
                 # Display all available streams
-                if 'index' not in kwargs:
+                if "index" not in kwargs:
                     self.p([])
                 else:
-                    stream_id = self.streams_sorted[0]['id'] if 'id' in self.streams_sorted[0] else self.streams_sorted[0]['itag']
+                    stream_id = (
+                        self.streams_sorted[0]["id"]
+                        if "id" in self.streams_sorted[0]
+                        else self.streams_sorted[0]["itag"]
+                    )
                     self.p_i(stream_id)
 
         else:
-            if 'stream_id' in kwargs and kwargs['stream_id']:
+            if "stream_id" in kwargs and kwargs["stream_id"]:
                 # Download the stream
-                stream_id = kwargs['stream_id']
+                stream_id = kwargs["stream_id"]
             else:
                 # Download stream with the best quality
-                stream_id = self.streams_sorted[0]['id'] if 'id' in self.streams_sorted[0] else self.streams_sorted[0]['itag']
+                stream_id = (
+                    self.streams_sorted[0]["id"]
+                    if "id" in self.streams_sorted[0]
+                    else self.streams_sorted[0]["itag"]
+                )
 
-            if 'index' not in kwargs:
+            if "index" not in kwargs:
                 self.p(stream_id)
             else:
                 self.p_i(stream_id)
 
             if stream_id in self.streams:
-                urls = self.streams[stream_id]['src']
-                ext = self.streams[stream_id]['container']
-                total_size = self.streams[stream_id]['size']
+                urls = self.streams[stream_id]["src"]
+                ext = self.streams[stream_id]["container"]
+                total_size = self.streams[stream_id]["size"]
             else:
-                urls = self.dash_streams[stream_id]['src']
-                ext = self.dash_streams[stream_id]['container']
-                total_size = self.dash_streams[stream_id]['size']
+                urls = self.dash_streams[stream_id]["src"]
+                ext = self.dash_streams[stream_id]["container"]
+                total_size = self.dash_streams[stream_id]["size"]
 
             if not urls:
-                log.wtf('[Failed] Cannot extract video source.')
+                log.wtf("[Failed] Cannot extract video source.")
             # For legacy main()
 
-            #Here's the change!!
+            # Here's the change!!
             # ffmpeg fails to parse.
             # download_url_ffmpeg(urls[0], self.title, 'mp4', output_dir=kwargs['output_dir'], merge=kwargs['merge'], stream=False)
-            #Here's the way works out
+            # Here's the way works out
             urls = general_m3u8_extractor(urls[0])
             # ffmpeg fail to convert the output video with mkv extension, due to sort of timestamp problem
-            download_urls(urls, self.title, 'mp4', 0, **kwargs)
-            
-            if not kwargs['caption']:
-                print('Skipping captions.')
+            download_urls(urls, self.title, "mp4", 0, **kwargs)
+
+            if not kwargs["caption"]:
+                print("Skipping captions.")
                 return
             for lang in self.caption_tracks:
-                filename = '%s.%s.srt' % (get_filename(self.title), lang)
-                print('Saving %s ... ' % filename, end="", flush=True)
+                filename = "%s.%s.srt" % (get_filename(self.title), lang)
+                print("Saving %s ... " % filename, end="", flush=True)
                 srt = self.caption_tracks[lang]
-                with open(os.path.join(kwargs['output_dir'], filename),
-                          'w', encoding='utf-8') as x:
+                with open(
+                    os.path.join(kwargs["output_dir"], filename), "w", encoding="utf-8"
+                ) as x:
                     x.write(srt)
-                print('Done.')
+                print("Done.")
 
-'''
+
+"""
         if info["code"] != "A000000":
             log.e("[error] outdated iQIYI key")
             log.wtf("is your i-got up-to-date?")
@@ -290,7 +339,7 @@ class Iqiyi(VideoExtractor):
         #because the url is generated before start downloading
         #and the key may be expired after 10 minutes
         self.streams[stream_id]['src'] = urls
-'''
+"""
 
 site = Iqiyi()
 download = site.download_by_url
