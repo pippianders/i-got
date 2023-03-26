@@ -1,0 +1,6 @@
+include *.rst
+include *.txt
+include Makefile
+include README.md
+include i-got
+include i-got.json
