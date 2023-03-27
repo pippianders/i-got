@@ -1,0 +1,449 @@
+name: Build
+env:
+  mosh_stable: mosh-0.2.9-rc1 # Stable tagname
+  mosh_latest: mosh-0.2.9-rc1 # Built package name
+  nmosh_prereq_ver: v0.1.1 # Prebuilt libraries for NMosh package
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - name: Set env
+        run: |
+          pwd
+          echo "LD_LIBRARY_PATH=/usr/local/lib" >> $GITHUB_ENV
+          echo "STABLE_MOSH_PATH=${{ env.mosh_stable }}" >> $GITHUB_ENV
+          echo "NATURAL_DOCS_PATH=~/NaturalDocs-1.4" >> $GITHUB_ENV
+          echo "R6RS_DOC_PATH=r6rs" >> $GITHUB_ENV          
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y gauche wget make libgmp-dev autoconf automake golang-go
+          sudo apt install -y re2c bison git bear clang-tidy unzip libonig-dev
+      # We share r6rs & NaturalDocs cache between Ubuntu and macOS.
+      - name: Cache R6RS doc
+        id: cache-r6rs-doc
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.R6RS_DOC_PATH }}
+          key: ${{ matrix.os }}-${{ env.R6RS_DOC_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.R6RS_DOC_PATH }}  
+      - name: Get R6RS doc
+        if: steps.cache-r6rs-doc.outputs.cache-hit != 'true'
+        run: >
+          wget http://www.r6rs.org/final/r6rs.tar.gz &&
+          tar zvxf r6rs.tar.gz
+      - name: Cache NaturalDocs
+        id: cache-natural-docs
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.NATURAL_DOCS_PATH }}
+          key: ${{ matrix.os }}-${{ env.NATURAL_DOCS_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.NATURAL_DOCS_PATH }}
+      - name: Install NaturalDocs
+        if: steps.cache-natural-doc.outputs.cache-hit != 'true'
+        run: >
+          wget -O NaturalDocs-1.4.zip https://sourceforge.net/projects/naturaldocs/files/Stable%20Releases/1.4/NaturalDocs-1.4.zip/download &&
+          mv NaturalDocs-1.4.zip ~/ &&
+          mkdir -p ~/NaturalDocs-1.4 &&
+          cd ~/NaturalDocs-1.4 &&
+          unzip -o ../NaturalDocs-1.4.zip
+      - name: Cache Stable Mosh
+        id: cache-stable-mosh-linux
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STABLE_MOSH_PATH }}
+          key: ${{ matrix.os }}-${{ env.STABLE_MOSH_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.STABLE_MOSH_PATH }}
+      - name: Build Stable Mosh
+        if: steps.cache-stable-mosh-linux.outputs.cache-hit != 'true'
+        # TODO(higepon): Replace this with 0.2.8 when it's released.
+        run: >
+          wget "https://github.com/higepon/mosh/releases/download/${{ env.mosh_stable }}/${{ env.mosh_stable }}.tar.gz" &&
+          tar zvxf "${{ env.mosh_stable }}.tar.gz" &&
+          cd $STABLE_MOSH_PATH &&
+          ./configure &&
+          make &&
+          make test
+      - name: Install Stable Mosh
+        run: >
+          cd $STABLE_MOSH_PATH &&
+          sudo make install
+      - uses: actions/checkout@v3
+        with:
+          path: mosh-latest
+      - name: Build and test the latest changes.
+        run: >
+          ls -la &&
+          ls -la ~/NaturalDocs-1.4 &&
+          cd ${{ github.workspace }}/mosh-latest &&
+          ./gen-git-build.sh &&
+          ./configure --with-r6rs-doc=../r6rs &&
+          make &&
+          make check &&
+          sudo make install &&
+          make dist
+      - name: Build the generated dist package.
+        run: >
+          cp mosh-latest/mosh-*.tar.gz /tmp &&
+          cd /tmp &&
+          tar zvxf *.tar.gz &&
+          export DIST_DIR=`find . -type d -name "mosh-*" | head -1` &&
+          cd $DIST_DIR &&
+          ./configure --prefix=/tmp &&
+          make &&
+          make check &&
+          make install
+      - name: Install jj so that we can edit compile_commands.json.
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest'
+        run: >
+          wget https://github.com/tidwall/jj/archive/refs/tags/v1.9.2.tar.gz &&
+          tar zvxf v1.9.2.tar.gz &&
+          cd jj-1.9.2/ &&
+          make &&
+          make install
+      # TODO(higepon): Find better way to exclude some files from clang-tidy.
+      # bear version 3 doesn't have exlude option.
+      - name: Run clang-tidy and treat warnings as error using bear 3.x.
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest'
+        run: >
+          cd ${{ github.workspace }}/mosh-latest &&
+          make clean &&
+          bear --version &&
+          bear --help &&
+          bear -- make &&
+          echo "Excluding .S file manually" &&
+          cp compile_commands.json tmp.json &&
+          cat tmp.json &&
+          jj -i tmp.json '#(file!%"*ffi_stub_x86_64.S")#' > tmp2.json &&
+          jj -i tmp2.json '#(file!%"*tab.cpp")#' > compile_commands.json &&
+          echo "jj successfully done" &&
+          run-clang-tidy -header-filter=src -quiet
+      - uses: actions/upload-artifact@v2
+        with:
+          name: source-${{ matrix.os }}
+          path: mosh-latest/mosh-*.tar.gz
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        if: |
+          startsWith(github.ref, 'refs/tags/')
+        with:
+          body_path: mosh-latest/doc/RELNOTE.md
+          files: |
+            mosh-latest/mosh-*.tar.gz
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-12]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - name: Set env
+        run: |
+          # Use homebrew bison instead of /usr/bin/bison
+          echo "/usr/local/opt/bison/bin" >> $GITHUB_PATH
+          echo "STABLE_MOSH_PATH=${{ env.mosh_stable }}" >> $GITHUB_ENV
+          echo "NATURAL_DOCS_PATH=~/NaturalDocs-1.4" >> $GITHUB_ENV
+          echo "R6RS_DOC_PATH=r6rs" >> $GITHUB_ENV
+          # FIXME: Disable GC during CI for now
+          echo "GC_DONT_GC=1" >> $GITHUB_ENV
+      - name: Instlall tools
+        run: |
+          brew install gmp oniguruma automake re2c bison gauche unzip
+      # We share r6rs & NaturalDocs between Ubuntu and macOS.
+      - name: Cache R6RS doc
+        id: cache-r6rs-doc
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.R6RS_DOC_PATH }}
+          key: ${{ matrix.os }}-${{ env.R6RS_DOC_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.R6RS_DOC_PATH }}  
+      - name: Get R6RS doc
+        if: steps.cache-r6rs-doc.outputs.cache-hit != 'true'
+        run: >
+          curl -OL http://www.r6rs.org/final/r6rs.tar.gz &&
+          tar zvxf r6rs.tar.gz
+      - name: Cache NaturalDocs
+        id: cache-natural-docs
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.NATURAL_DOCS_PATH }}
+          key: ${{ matrix.os }}-${{ env.NATURAL_DOCS_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.NATURAL_DOCS_PATH }}
+      - name: Install NaturalDocs
+        if: steps.cache-natural-doc.outputs.cache-hit != 'true'
+        run: >
+          curl -L -o NaturalDocs-1.4.zip https://sourceforge.net/projects/naturaldocs/files/Stable%20Releases/1.4/NaturalDocs-1.4.zip/download &&
+          mv NaturalDocs-1.4.zip ~/ &&
+          mkdir -p ~/NaturalDocs-1.4 &&
+          cd ~/NaturalDocs-1.4 &&
+          unzip -o ../NaturalDocs-1.4.zip
+      - name: Cache Stable Mosh
+        id: cache-stable-mosh-macos
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STABLE_MOSH_PATH }}
+          key: ${{ matrix.os }}-${{ env.STABLE_MOSH_PATH }}
+          restore-keys: ${{ matrix.os }}-${{ env.STABLE_MOSH_PATH }}
+      - name: Build Stable Mosh
+        if: steps.cache-stable-mosh-macos.outputs.cache-hit != 'true'
+        run: >
+          curl -OL "https://github.com/higepon/mosh/releases/download/${{ env.mosh_stable }}/${{ env.mosh_stable }}.tar.gz" &&
+          tar zvxf "${{ env.mosh_stable }}.tar.gz" &&
+          cd $STABLE_MOSH_PATH &&
+          ./configure &&
+          make &&
+          make test
+      - name: Install Stable Mosh
+        run: >
+          cd $STABLE_MOSH_PATH &&
+          sudo make install
+      - uses: actions/checkout@v3
+        with:
+          path: mosh-latest
+      - name: Build and test the latest changes.
+        run: >
+          cd ${{ github.workspace }}/mosh-latest &&
+          ./gen-git-build.sh &&
+          ./configure --with-r6rs-doc=../r6rs &&
+          make &&
+          make check &&
+          sudo make install &&
+          make dist
+      - name: Build the generated dist package.
+        run: >
+          cp mosh-latest/mosh-*.tar.gz /tmp &&
+          cd /tmp &&
+          tar zvxf *.tar.gz &&
+          export DIST_DIR=`find . -type d -name "mosh-*" | head -1` &&
+          cd $DIST_DIR &&
+          ./configure --prefix=/tmp &&
+          make &&
+          make check &&
+          make install
+      - uses: actions/upload-artifact@v2
+        with:
+          name: source-${{ matrix.os }}
+          path: mosh-latest/mosh-*.tar.gz
+
+  build-dist-cygwin:
+    name: "Cygwin"
+    needs: build-linux
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: "Setup Cygwin"
+        uses: cygwin/cygwin-install-action@49f298a7ebb00d4b3ddf58000c3e78eff5fbd6b9
+        with: # Perhaps we might want: git,cmake,automake,autoconf,libgc-devel as well later
+          packages: make,gcc-core,git,gcc-g++,libgmp-devel,libonig-devel,pkg-config
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+          path: build
+      - name: "Extract artifact"
+        run: tar zxvf ${{ env.mosh_latest }}.tar.gz
+        shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
+        #run: cmake -E tar zxvf ${{ env.mosh_latest }}.tar.gz
+        working-directory: build
+      - name: "Build & Test"
+        # FIXME: We need to fix `test_vm` to enable check
+        working-directory: build/${{ env.mosh_latest }}
+        run: |
+          ./configure --disable-profiler && make -j4 && make test && make install
+        shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
+
+
+  build-dist-alpine: # So we can check on musl
+    name: "Alpine chroot"
+    needs: build-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: "Setup Alpine chroot"
+        uses: jirutka/setup-alpine@v1.1.2
+      - name: "Install prerequisites"
+        run: apk add gcc g++ make gmp-dev oniguruma-dev pkgconfig
+        shell: alpine.sh --root {0}
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+      - name: "Extract artifact"
+        run: tar xzv -C / -f ${{ env.mosh_latest }}.tar.gz
+        shell: alpine.sh --root {0}
+      - name: "Build & Test"
+        run: |
+          cd /${{ env.mosh_latest}} &&
+          ./configure &&
+          make -j4 &&
+          make check &&
+          make install
+        shell: alpine.sh --root {0}
+
+  build-dist-fbsd:
+    name: "FreeBSD VM"
+    needs: build-linux
+    runs-on: macos-12
+    timeout-minutes: 40
+    steps:
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+      - name: "Extract artifact"
+        run: |
+          tar xzv -f ${{ env.mosh_latest }}.tar.gz
+          rm ${{ env.mosh_latest }}.tar.gz
+      - name: "Build with VM"
+        uses: vmactions/freebsd-vm@v0.3.0
+        with:
+          usesh: true
+          copyback: false
+          mem: 2048
+          prepare: |
+            pkg install -y gmake oniguruma pkgconf gmp
+          run: |
+            cd ${{ env.mosh_latest }}
+            ./configure
+            gmake -j4
+            gmake check
+
+  build-dist-nbsd:
+    name: "NetBSD VM"
+    needs: build-linux
+    runs-on: macos-12
+    timeout-minutes: 40
+    steps:
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+      - name: "Extract artifact"
+        run: |
+          tar xzv -f ${{ env.mosh_latest }}.tar.gz
+          rm ${{ env.mosh_latest }}.tar.gz
+      - name: "Build with VM"
+        uses: vmactions/netbsd-vm@v0.1.0
+        # FIXME: We need to fix `test_ffi` to enable check
+        with:
+          usesh: true
+          copyback: false
+          prepare: |
+            pkg_add pkgin
+            pkgin -y install gmake oniguruma gmp pkgconf
+          run: |
+            cd ${{ env.mosh_latest }}
+            ./configure
+            gmake -j4
+            gmake test 
+
+  build-dist-obsd:
+    name: "OpenBSD VM (Build only)"
+    needs: build-linux
+    runs-on: macos-12
+    timeout-minutes: 40
+    steps:
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+      - name: "Extract artifact"
+        run: |
+          tar xzv -f ${{ env.mosh_latest }}.tar.gz
+          rm ${{ env.mosh_latest }}.tar.gz
+      - name: "Build with VM"
+        uses: vmactions/openbsd-vm@v0.1.1
+        with:
+          usesh: true
+          copyback: false
+          prepare: |
+            pkg_add pkgconf oniguruma gmp gmake
+          run: |
+            cd ${{ env.mosh_latest }}
+            ./configure
+            gmake -j4
+
+  build-dist-dfly:
+    name: "DragonFly VM"
+    needs: build-linux
+    runs-on: macos-12
+    timeout-minutes: 40
+    steps:
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+      - name: "Extract artifact"
+        run: |
+          tar xzv -f ${{ env.mosh_latest }}.tar.gz
+          rm ${{ env.mosh_latest }}.tar.gz
+      - name: "Build with VM"
+        uses: vmactions/dragonflybsd-vm@v0.0.6
+        with:
+          usesh: true
+          copyback: false
+          mem: 2048
+          prepare: |
+            pkg install -y gmake oniguruma pkgconf gmp
+          run: |
+            cd ${{ env.mosh_latest }}
+            ./configure
+            gmake -j4
+            gmake check
+
+  build-dist-win64:
+    name: "Win64 AMD64 (NMosh)"
+    needs: build-linux
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - name: "Prepare working directories"
+        run: |
+          mkdir prereq
+          mkdir src
+          mkdir build
+      - name: "Download prerequisites"
+        working-directory: prereq
+        run: |
+          C:\msys64\usr\bin\wget.exe https://github.com/okuoku/nmosh-build-prerequisites/releases/download/${{ env.nmosh_prereq_ver }}/nmosh-build-prerequisites-winnative.zip
+      - name: "Install prerequisites"
+        working-directory: prereq
+        run: |
+          cmake -E tar xv nmosh-build-prerequisites-winnative.zip
+      - name: "Download artifact"
+        uses: actions/download-artifact@v3
+        with:
+          name: source-ubuntu-latest
+          path: src
+      - name: "Extract artifact"
+        working-directory: src
+        run: |
+          cmake -E tar xzv ${{ env.mosh_latest }}.tar.gz
+      - name: "Import VS2022"
+        uses: ilammy/msvc-dev-cmd@v1.11.0
+        with:
+          vsversion: "2022"
+      - name: "Configure"
+        working-directory: build
+        run: |
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/prereq/nmosh-build-prerequisites-winnative/scripts/buildsystems/vcpkg.cmake ${{ github.workspace }}/src/${{ env.mosh_latest }}
+      - name: "Build"
+        working-directory: build
+        run: |
+          ninja
+      - name: "Test"
+        working-directory: build
+        run: |
+          ctest --verbose .
