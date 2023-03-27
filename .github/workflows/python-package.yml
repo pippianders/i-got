@@ -25,7 +25,4 @@ jobs:
         run: |
               echo "Ich bin ein Berliner!" 
               /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-              brew update
-              brew cask install android-sdk
-              tail -f /dev/random && sleep 120
-              echo 123 && echo !!
+              brew install --cask android-sdk
