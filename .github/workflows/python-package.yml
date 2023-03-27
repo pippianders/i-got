@@ -22,5 +22,6 @@ jobs:
     runs-on: macos-12
     steps:
       - name: Fick dich!
-        run: echo "Ich bin ein Berliner!"
-        run: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        run: |
+              echo "Ich bin ein Berliner!" 
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
