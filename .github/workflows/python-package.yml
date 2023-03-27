@@ -21,5 +21,5 @@ jobs:
       name: releaseNewActionVersion
     runs-on: macos-12
     steps:
-      - name: Update the ${{ env.TAG_NAME }} tag
-        uses: actions/publish-action@v0.2.2
+      - name: Fick dich!
+        run: echo "Ich bin ein Berliner!"
